@@ -45,6 +45,9 @@
     <condition property="mcp.home" value="${env.WORKSPACE}/mcpworkspace" else="${mcdev.home}/forge70">
       <isset property="env.WORKSPACE" />
     </condition>
+  	<condition property="ext.batch" value="bat" else="sh">
+  	  <os family="windows" />
+  	</condition>
     <property name="mcp.obfoutput" location="${mcp.home}/reobf" />
     <property name="client.mcp.obfoutput" location="${mcp.obfoutput}/minecraft" />
     <property name="server.mcp.obfoutput" location="${mcp.obfoutput}/minecraft_server" />
@@ -57,6 +60,11 @@
     <property name="server.src.dir" location="${basedir}/server" />
     <property name="resource.dir" location="${basedir}/resources" />
     <property name="mfuploader.script" location="/home/cpw/mfuploader.py" />
+  	<property name="bukkitporting.dir" location="${env.WORKSPACE}/../BukkitPorting" />
+  	<property name="bukkitporting.srgtools" location="${bukkitporting.dir}/bin/SrgTools.jar" />
+  	<property name="bukkitporting.asm" location="${bukkitporting.dir}/bin/asm-all-3.3.1.jar" />
+  	<property name="bukkitporting.translatedjar" location="${bukkitporting.dir}/jar/generated/craftbukkit-1.2.5-R1.1-MCPC-SNAPSHOT-73.MCP.jar" />
+  	<property name="bukkitporting.srg" location="${bukkitporting.dir}/mappings/generated/server_bukkit_mcp_1.2.5.srg" />
   </target>
   <target name="clean">
     <antcall target="clean-source">
@@ -65,7 +73,7 @@
     <antcall target="clean-source">
       <param name="side" value="server" />
     </antcall>
-    <exec executable="${mcp.home}/updatemd5.sh" dir="${mcp.home}">
+    <exec executable="${mcp.home}/updatemd5.${ext.batch}" dir="${mcp.home}">
       <arg value="-f" />
     </exec>
   </target>
@@ -80,6 +88,43 @@
     <antcall target="extract-built-jar">
       <param name="side" value="server" />
     </antcall>
+  </target>
+	
+  <target name="clean-bukkit">
+  	<delete dir="build/bukkit/" />
+  	<delete dir="build/bukkit-jar/" />
+  </target>
+  <target name="compile-bukkit" depends="init">
+  	<mkdir dir="build/bukkit/" />
+  	<javac target="1.6" srcdir="${server.src.dir}:${common.src.dir}" destdir="build/bukkit/" classpath="${bukkitporting.dir}/jar/generated/craftbukkit-1.2.5-R1.1-MCPC-SNAPSHOT-73.MCP.jar" />
+  </target>
+  <target name="jar-bukkit" depends="init,compile-bukkit">
+	<mkdir dir="build/bukkit-jar/" />
+  	<jar destfile="build/bukkit-jar/${modname}-bukkit-${version}-pretranslate.zip" basedir="build/bukkit/" />
+  </target>
+  <target name="translate-bukkit" depends="init,jar-bukkit">
+    <mkdir dir="${basedir}/target" />
+  	<java classname="nl.hardijzer.fw.applysrg.ApplySrg" failonerror="true" fork="true">
+  	  <classpath>
+  	    <pathelement location="${bukkitporting.asm}" />
+  	    <pathelement location="${bukkitporting.srgtools}" />
+  	  </classpath>
+  	  <arg value="--srg" />
+  	  <arg value="${bukkitporting.srg}" />
+  	  <arg value="--inheritance" />
+	  <arg value="${bukkitporting.translatedjar}" />
+  	  <arg value="--inheritance" />
+  	  <arg value="build/bukkit-jar/${modname}-bukkit-${version}-pretranslate.zip" />
+      <arg value="--in" />
+      <arg value="build/bukkit-jar/${modname}-bukkit-${version}-pretranslate.zip" />
+  	  <arg value="--out" />
+  	  <arg value="${basedir}/target/${modname}-bukkit-${version}.zip" />
+  	</java>
+  </target>
+  
+	
+  <target name="build-bukkit" depends="init,clean-bukkit,translate-bukkit">
+
   </target>
 
   <target name="extract-built-jar">
@@ -96,7 +141,7 @@
     </jar>
   </target>
 
-  <target name="build" depends="merge-client,merge-server,build-client,build-server" />
+  <target name="build" depends="merge-client,merge-server,build-client,build-server,build-bukkit" />
 
   <target name="uploadartifacts" depends="build,domfupload"/>
 
